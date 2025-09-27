@@ -31,7 +31,6 @@ export class ModuleInstance extends InstanceBase<ModuleConfig> {
 
 		this.createOSCServer()
 		this.createClient()
-		this.connectToConsole()
 	}
 	// When module gets deleted
 	async destroy(): Promise<void> {
@@ -103,6 +102,7 @@ export class ModuleInstance extends InstanceBase<ModuleConfig> {
 					const stringValue = JSON.stringify(msg[1])
 					if (stringArr[1] === 'Console' && stringArr[2] === 'Name') {
 						this.setVariableValues({ console_name: stringValue })
+						this.updateStatus(InstanceStatus.Ok)
 					}
 					if (stringArr[1] === 'Control_Groups' && stringArr[3] === 'fader') {
 						const faderVal = parseFloat(stringValue)
@@ -114,7 +114,7 @@ export class ModuleInstance extends InstanceBase<ModuleConfig> {
 			})
 			this.oscServer.on('listening', () => {
 				this.log('debug', `OSC Server listening on ${this.config.rec_port}`)
-				this.updateStatus(InstanceStatus.Ok)
+				this.connectToConsole()
 			})
 		} catch {
 			this.log('error', `Cannot create server on port ${this.config.rec_port}`)
