@@ -14,8 +14,8 @@ export function UpdateActions(self: ModuleInstance): void {
 					max: 100,
 				},
 			],
-			callback: async (event) => {
-				console.log('Hello world!', event.options.num)
+			callback: async (_) => {
+				self.log('debug', 'hello world.')
 			},
 		},
 	})

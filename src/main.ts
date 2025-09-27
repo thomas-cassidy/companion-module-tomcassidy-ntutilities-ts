@@ -14,8 +14,6 @@ import { Client, Server } from 'node-osc'
 
 export class ModuleInstance extends InstanceBase<ModuleConfig> {
 	config!: ModuleConfig // Setup in init()
-	// private pollInterval?: NodeJS.Timeout
-	// private websocket?: WebSocket
 	private oscServer?: Server
 	private consoleClient?: Client
 
@@ -31,7 +29,6 @@ export class ModuleInstance extends InstanceBase<ModuleConfig> {
 		this.updateFeedbacks() // export feedbacks
 		this.updateVariableDefinitions() // export variable definitions
 
-		// this.connectToWebSocket()
 		this.createOSCServer()
 		this.createClient()
 		this.connectToConsole()
@@ -39,8 +36,8 @@ export class ModuleInstance extends InstanceBase<ModuleConfig> {
 	// When module gets deleted
 	async destroy(): Promise<void> {
 		this.log('debug', 'destroy')
-		// this.websocket?.close()
 		this.oscServer?.close()
+		this.consoleClient?.close()
 	}
 
 	async configUpdated(config: ModuleConfig): Promise<void> {
@@ -96,10 +93,24 @@ export class ModuleInstance extends InstanceBase<ModuleConfig> {
 		try {
 			this.oscServer = new Server(this.config.rec_port, '0.0.0.0')
 			this.oscServer.on('error', (err) => {
+				this.updateStatus(InstanceStatus.ConnectionFailure)
 				this.log('error', `Error in OSC Server: ${err.message}`)
 			})
 			this.oscServer.on('message', (msg) => {
 				this.log('debug', msg[0].toString())
+				try {
+					const stringArr = msg[0].split('/')
+					const stringValue = JSON.stringify(msg[1])
+					if (stringArr[1] === 'Console' && stringArr[2] === 'Name') {
+						this.setVariableValues({ console_name: stringValue })
+					}
+					if (stringArr[1] === 'Control_Groups' && stringArr[3] === 'fader') {
+						const faderVal = parseFloat(stringValue)
+						this.setVariableValues({ [`cg${stringArr[2]}`]: faderVal === -150 ? 'Out' : faderVal.toFixed(2) })
+					}
+				} catch {
+					console.log('cannot split this guy')
+				}
 			})
 			this.oscServer.on('listening', () => {
 				this.log('debug', `OSC Server listening on ${this.config.rec_port}`)
