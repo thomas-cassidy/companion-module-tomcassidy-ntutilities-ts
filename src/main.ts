@@ -10,12 +10,21 @@ import { UpdateVariableDefinitions } from './variables.js'
 import { UpgradeScripts } from './upgrades.js'
 import { UpdateActions } from './actions.js'
 import { UpdateFeedbacks } from './feedbacks.js'
-import { Client, Server } from 'node-osc'
+import { ArgumentType, Bundle, Client, Server } from 'node-osc'
+
+type Snapshot = {
+	name: ArgumentType
+	index: ArgumentType
+	number: ArgumentType
+}
 
 export class ModuleInstance extends InstanceBase<ModuleConfig> {
 	config!: ModuleConfig // Setup in init()
 	private oscServer?: Server
 	private consoleClient?: Client
+	private connectionLoop?: NodeJS.Timeout
+	private cueListPoll?: NodeJS.Timeout
+	cueList: Snapshot[] = []
 
 	constructor(internal: unknown) {
 		super(internal)
@@ -37,6 +46,7 @@ export class ModuleInstance extends InstanceBase<ModuleConfig> {
 		this.log('debug', 'destroy')
 		this.oscServer?.close()
 		this.consoleClient?.close()
+		clearInterval(this.cueListPoll)
 	}
 
 	async configUpdated(config: ModuleConfig): Promise<void> {
@@ -60,34 +70,17 @@ export class ModuleInstance extends InstanceBase<ModuleConfig> {
 		UpdateVariableDefinitions(this)
 	}
 
-	// private connectToWebSocket() {
-	// 	try {
-	// 		if (this.websocket?.OPEN) this.websocket.close()
-	// 		this.websocket = new WebSocket(`ws://${this.config.target}:${this.config.send_port}/qlab`)
-	// 		this.websocket.onopen = () => {
-	// 			this.log('debug', 'websocket connected')
-	// 		}
-	// 		this.websocket.onmessage = (event) => {
-	// 			this.log('debug', `got message: ${event.data}`)
-	// 			const payload = JSON.parse(event.data)
-	// 			this.log('debug', payload)
+	sendOSCBundle(bundle: Bundle): void {
+		this.log('debug', `sent: ${JSON.stringify(bundle.elements)}`)
+		this.consoleClient?.send(bundle)
+	}
 
-	// 			if (payload.cg) {
-	// 				this.log('debug', payload.qlab)
-	// 				this.setVariableValues({ [`cg${payload.cg}`]: payload.value })
-	// 			}
-	// 		}
-	// 		this.websocket.onerror = (err) => {
-	// 			this.log('error', `websocket error: ${err.error}`)
-	// 		}
-	// 		thigit s.websocket.onclose = () => {
-	// 			this.log('debug', 'websocket closed')
-	// 		}
-	// 	} catch (e) {
-	// 		this.log('error', `Cannot connect to websocket: ${e}`)
-	// 	}
-	// }
+	sendOSC(options: { address: string; value: string | number }): void {
+		this.log('debug', `sent: ${options.address} ${options.value}`)
+		this.consoleClient?.send(options.address, options.value)
+	}
 
+	//set up OSC server on local ips
 	private createOSCServer() {
 		try {
 			this.oscServer = new Server(this.config.rec_port, '0.0.0.0')
@@ -96,40 +89,84 @@ export class ModuleInstance extends InstanceBase<ModuleConfig> {
 				this.log('error', `Error in OSC Server: ${err.message}`)
 			})
 			this.oscServer.on('message', (msg) => {
-				this.log('debug', msg[0].toString())
 				try {
-					const stringArr = msg[0].split('/')
+					const addressArray = msg[0].split('/')
 					const stringValue = JSON.stringify(msg[1])
-					if (stringArr[1] === 'Console' && stringArr[2] === 'Name') {
-						this.setVariableValues({ console_name: stringValue })
-						this.updateStatus(InstanceStatus.Ok)
-					}
-					if (stringArr[1] === 'Control_Groups' && stringArr[3] === 'fader') {
-						const faderVal = parseFloat(stringValue)
-						this.setVariableValues({ [`cg${stringArr[2]}`]: faderVal === -150 ? 'Out' : faderVal.toFixed(2) })
+					// this.log(
+					// 	'debug',
+					// 	`${msg[0].toString()} ${stringValue} ${JSON.stringify(msg[2])} ${JSON.stringify(msg[3])} ${JSON.stringify(msg[4])}`,
+					// )
+					switch (addressArray[1]) {
+						case 'Console':
+							if (addressArray[2] === 'Name') {
+								this.setVariableValues({ console_name: stringValue })
+								this.updateStatus(InstanceStatus.Ok)
+								clearInterval(this.connectionLoop)
+								this.cueListPoll = setInterval(() => this.consoleClient?.send('/Snapshots/names/?'), 1000)
+							}
+							// if (addressArray[2])
+							break
+						case 'Control_Groups':
+							if (addressArray[3] === 'fader') {
+								const faderVal = parseFloat(stringValue)
+								this.setVariableValues({ [`cg${addressArray[2]}`]: faderVal === -150 ? 'Out' : faderVal.toFixed(2) })
+							}
+							break
+						case 'Snapshots':
+							if (addressArray[2] === 'name') {
+								const i = msg[1]
+								const existingCue = this.cueList.find((c) => c.index == i)
+
+								if (existingCue) {
+									existingCue.name = msg[4]
+									existingCue.number = msg[2]
+								} else {
+									this.cueList?.push({
+										name: msg[4],
+										index: msg[1],
+										number: msg[2],
+									})
+								}
+							}
+							this.cueList.sort((x, y) => (x.index < y.index ? 1 : 0))
+							if (addressArray[2] === 'Current_Snapshot') {
+								this.setVariableValues({
+									current_snapshot: JSON.stringify(this.cueList.find((x) => x.index === msg[1])?.name),
+								})
+							}
+							// if (this.cueList) this.log('debug', JSON.stringify(this.cueList))
+							break
+						default:
+							return
 					}
 				} catch {
-					console.log('cannot split this guy')
+					this.log('debug', 'cannot split this guy')
 				}
 			})
 			this.oscServer.on('listening', () => {
-				this.log('debug', `OSC Server listening on ${this.config.rec_port}`)
-				this.connectToConsole()
+				this.log('info', `OSC Server listening on ${this.config.rec_port}`)
+				this.connectionLoop = setInterval(() => {
+					this.connectToConsole()
+				}, 1000)
 			})
 		} catch {
 			this.log('error', `Cannot create server on port ${this.config.rec_port}`)
 		}
 	}
 
+	//create client at target console ip
 	private createClient() {
 		this.consoleClient = new Client(this.config.target, this.config.send_port)
 	}
 
+	//sends connection string and then collects the console name and CG Values
 	private connectToConsole() {
 		this.consoleClient?.send('/Console/Name/?')
+		this.consoleClient?.send('/Snapshots/names/?')
 		for (let i = 1; i <= 36; i++) {
 			this.consoleClient?.send(`/Control_Groups/${i}/fader/?`)
 		}
+		this.consoleClient?.send('/Snapshots/Current_Snapshot/?')
 	}
 }
 

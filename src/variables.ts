@@ -1,43 +1,12 @@
 import type { ModuleInstance } from './main.js'
 
 export function UpdateVariableDefinitions(self: ModuleInstance): void {
-	self.setVariableDefinitions([
+	const vars = [
 		{ variableId: 'console_name', name: 'Console Name' },
-		{ variableId: 'cg1', name: 'Control Group 1' },
-		{ variableId: 'cg2', name: 'Control Group 2' },
-		{ variableId: 'cg3', name: 'Control Group 3' },
-		{ variableId: 'cg4', name: 'Control Group 4' },
-		{ variableId: 'cg5', name: 'Control Group 5' },
-		{ variableId: 'cg6', name: 'Control Group 6' },
-		{ variableId: 'cg7', name: 'Control Group 7' },
-		{ variableId: 'cg8', name: 'Control Group 8' },
-		{ variableId: 'cg9', name: 'Control Group 9' },
-		{ variableId: 'cg10', name: 'Control Group 10' },
-		{ variableId: 'cg11', name: 'Control Group 11' },
-		{ variableId: 'cg12', name: 'Control Group 12' },
-		{ variableId: 'cg13', name: 'Control Group 13' },
-		{ variableId: 'cg14', name: 'Control Group 14' },
-		{ variableId: 'cg15', name: 'Control Group 15' },
-		{ variableId: 'cg16', name: 'Control Group 16' },
-		{ variableId: 'cg17', name: 'Control Group 17' },
-		{ variableId: 'cg18', name: 'Control Group 18' },
-		{ variableId: 'cg19', name: 'Control Group 19' },
-		{ variableId: 'cg20', name: 'Control Group 20' },
-		{ variableId: 'cg21', name: 'Control Group 21' },
-		{ variableId: 'cg22', name: 'Control Group 22' },
-		{ variableId: 'cg23', name: 'Control Group 23' },
-		{ variableId: 'cg24', name: 'Control Group 24' },
-		{ variableId: 'cg25', name: 'Control Group 25' },
-		{ variableId: 'cg26', name: 'Control Group 26' },
-		{ variableId: 'cg27', name: 'Control Group 27' },
-		{ variableId: 'cg28', name: 'Control Group 28' },
-		{ variableId: 'cg29', name: 'Control Group 29' },
-		{ variableId: 'cg30', name: 'Control Group 30' },
-		{ variableId: 'cg31', name: 'Control Group 31' },
-		{ variableId: 'cg32', name: 'Control Group 32' },
-		{ variableId: 'cg33', name: 'Control Group 33' },
-		{ variableId: 'cg34', name: 'Control Group 34' },
-		{ variableId: 'cg35', name: 'Control Group 35' },
-		{ variableId: 'cg36', name: 'Control Group 36' },
-	])
+		{ variableId: 'current_snapshot', name: 'Current Name' },
+	]
+	for (let i = 1; i <= 36; i++) {
+		vars.push({ variableId: `cg${i}`, name: `Control Group ${i}` })
+	}
+	self.setVariableDefinitions(vars)
 }
