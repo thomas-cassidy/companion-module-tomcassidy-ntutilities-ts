@@ -1,5 +1,5 @@
 {
-	"name": "your-module-name",
+	"name": "tcass-utilities",
 	"version": "0.1.0",
 	"main": "dist/main.js",
 	"type": "module",

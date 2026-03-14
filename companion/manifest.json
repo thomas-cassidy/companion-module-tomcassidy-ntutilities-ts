@@ -1,16 +1,16 @@
 {
-	"id": "nt-utilities",
-	"name": "nt-utilities",
-	"shortname": "nt-utilities",
+	"id": "tcass-utilities",
+	"name": "tCass Utilities",
+	"shortname": "tcass-utilities",
 	"description": "Things what i think is useful",
 	"version": "0.0.0",
 	"license": "MIT",
-	"repository": "git+https://github.com/bitfocus/companion-module-your-module-name.git",
-	"bugs": "https://github.com/bitfocus/companion-module-your-module-name/issues",
+	"repository": "git+https://github.com/thomas-cassidy/companion-module-tomcassidy-ntutilities-ts",
+	"bugs": "https://github.com/thomas-cassidy/companion-module-tomcassidy-ntutilities-ts",
 	"maintainers": [
 		{
 			"name": "Tom Cassidy",
-			"email": "myemail"
+			"email": "tomcass@me.com"
 		}
 	],
 	"runtime": {
@@ -21,6 +21,6 @@
 	},
 	"legacyIds": [],
 	"manufacturer": "Tom Cassidy",
-	"products": ["NT Utilities"],
+	"products": ["tCass Utilities"],
 	"keywords": []
 }
