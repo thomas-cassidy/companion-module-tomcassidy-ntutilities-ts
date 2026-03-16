@@ -118,6 +118,9 @@ export class ModuleInstance extends InstanceBase<ModuleConfig> {
 
 	//create client at target console ip
 	private createClient() {
+		if (!this.config.target || !this.config.send_port) {
+			return this.updateStatus(InstanceStatus.BadConfig)
+		}
 		this.consoleClient = new Client(this.config.target, this.config.send_port)
 	}
 
