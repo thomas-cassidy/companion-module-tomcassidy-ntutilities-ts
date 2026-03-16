@@ -1,7 +1,7 @@
 {
-	"id": "tcass-utilities",
-	"name": "tCass Utilities",
-	"shortname": "tcass-utilities",
+	"id": "nt-utilities",
+	"name": "nt Utilities",
+	"shortname": "nt-utilities",
 	"description": "Things what i think is useful",
 	"version": "0.0.0",
 	"license": "MIT",

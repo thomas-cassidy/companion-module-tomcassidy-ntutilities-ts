@@ -10,19 +10,22 @@ import { UpdateVariableDefinitions } from './variables.js'
 import { UpgradeScripts } from './upgrades.js'
 import { UpdateActions } from './actions.js'
 import { UpdateFeedbacks } from './feedbacks.js'
-import { ArgumentType, Bundle, Client, Server } from 'node-osc'
+import { Bundle, Client, Server } from 'node-osc'
 
 type Snapshot = {
-	name: ArgumentType
-	index: ArgumentType
-	number: ArgumentType
+	name: any
+	index: any
+	number: any
 }
 
 export class ModuleInstance extends InstanceBase<ModuleConfig> {
 	config!: ModuleConfig // Setup in init()
+	private moduleStatus: InstanceStatus = InstanceStatus.Disconnected
 	private oscServer?: Server
 	private consoleClient?: Client
 	private connectionLoop?: NodeJS.Timeout
+	private lastMessage?: number
+	private watchdog?: NodeJS.Timeout
 	private cueListPoll?: NodeJS.Timeout
 	cueList: Snapshot[] = []
 
@@ -38,15 +41,20 @@ export class ModuleInstance extends InstanceBase<ModuleConfig> {
 		this.updateFeedbacks() // export feedbacks
 		this.updateVariableDefinitions() // export variable definitions
 
+		this.setVariableValues({ connected: 'Disconnected' })
+
 		this.createOSCServer()
 		this.createClient()
 	}
 	// When module gets deleted
 	async destroy(): Promise<void> {
 		this.log('debug', 'destroy')
-		this.oscServer?.close()
-		this.consoleClient?.close()
+		if (this.oscServer) void this.oscServer.close()
+		if (this.consoleClient) void this.consoleClient.close()
+
+		clearInterval(this.connectionLoop)
 		clearInterval(this.cueListPoll)
+		clearInterval(this.watchdog)
 	}
 
 	async configUpdated(config: ModuleConfig): Promise<void> {
@@ -72,12 +80,12 @@ export class ModuleInstance extends InstanceBase<ModuleConfig> {
 
 	sendOSCBundle(bundle: Bundle): void {
 		this.log('debug', `sent: ${JSON.stringify(bundle.elements)}`)
-		this.consoleClient?.send(bundle)
+		if (this.consoleClient) void this.consoleClient.send(bundle)
 	}
 
 	sendOSC(options: { address: string; value: string | number }): void {
 		this.log('debug', `sent: ${options.address} ${options.value}`)
-		this.consoleClient?.send(options.address, options.value)
+		if (this.consoleClient) void this.consoleClient.send(options.address, options.value)
 	}
 
 	//set up OSC server on local ips
@@ -88,66 +96,16 @@ export class ModuleInstance extends InstanceBase<ModuleConfig> {
 				this.updateStatus(InstanceStatus.ConnectionFailure)
 				this.log('error', `Error in OSC Server: ${err.message}`)
 			})
-			this.oscServer.on('message', (msg) => {
-				try {
-					const addressArray = msg[0].split('/')
-					const stringValue = JSON.stringify(msg[1])
-					// this.log(
-					// 	'debug',
-					// 	`${msg[0].toString()} ${stringValue} ${JSON.stringify(msg[2])} ${JSON.stringify(msg[3])} ${JSON.stringify(msg[4])}`,
-					// )
-					switch (addressArray[1]) {
-						case 'Console':
-							if (addressArray[2] === 'Name') {
-								this.setVariableValues({ console_name: stringValue })
-								this.updateStatus(InstanceStatus.Ok)
-								clearInterval(this.connectionLoop)
-								this.cueListPoll = setInterval(() => this.consoleClient?.send('/Snapshots/names/?'), 1000)
-							}
-							// if (addressArray[2])
-							break
-						case 'Control_Groups':
-							if (addressArray[3] === 'fader') {
-								const faderVal = parseFloat(stringValue)
-								this.setVariableValues({ [`cg${addressArray[2]}`]: faderVal === -150 ? 'Out' : faderVal.toFixed(2) })
-							}
-							break
-						case 'Snapshots':
-							if (addressArray[2] === 'name') {
-								const i = msg[1]
-								const existingCue = this.cueList.find((c) => c.index == i)
-
-								if (existingCue) {
-									existingCue.name = msg[4]
-									existingCue.number = msg[2]
-								} else {
-									this.cueList?.push({
-										name: msg[4],
-										index: msg[1],
-										number: msg[2],
-									})
-								}
-							}
-							this.cueList.sort((x, y) => (x.index < y.index ? 1 : 0))
-							if (addressArray[2] === 'Current_Snapshot') {
-								this.setVariableValues({
-									current_snapshot: JSON.stringify(this.cueList.find((x) => x.index === msg[1])?.name),
-								})
-							}
-							// if (this.cueList) this.log('debug', JSON.stringify(this.cueList))
-							break
-						default:
-							return
-					}
-				} catch {
-					this.log('debug', 'cannot split this guy')
-				}
-			})
+			this.oscServer.on('message', (msg) => this.handleOSCMessage(msg))
 			this.oscServer.on('listening', () => {
 				this.log('info', `OSC Server listening on ${this.config.rec_port}`)
 				this.connectionLoop = setInterval(() => {
 					this.connectToConsole()
 				}, 1000)
+
+				this.watchdog = setInterval(() => {
+					this.checkStatus()
+				}, 10000)
 			})
 		} catch {
 			this.log('error', `Cannot create server on port ${this.config.rec_port}`)
@@ -161,12 +119,94 @@ export class ModuleInstance extends InstanceBase<ModuleConfig> {
 
 	//sends connection string and then collects the console name and CG Values
 	private connectToConsole() {
-		this.consoleClient?.send('/Console/Name/?')
-		this.consoleClient?.send('/Snapshots/names/?')
+		if (!this.consoleClient) return
+		void this.consoleClient.send('/Console/Name/?')
+		void this.consoleClient.send('/Snapshots/names/?')
 		for (let i = 1; i <= 36; i++) {
-			this.consoleClient?.send(`/Control_Groups/${i}/fader/?`)
+			void this.consoleClient.send(`/Control_Groups/${i}/fader/?`)
 		}
-		this.consoleClient?.send('/Snapshots/Current_Snapshot/?')
+		void this.consoleClient.send('/Snapshots/Current_Snapshot/?')
+	}
+
+	//check last message was within the last 10 seconds
+	private checkStatus() {
+		if (!this.lastMessage) {
+			this.setVariableValues({ connected: 'Disconnected' })
+			this.moduleStatus = InstanceStatus.Connecting
+			return this.updateStatus(InstanceStatus.Connecting)
+		}
+		const diff = Date.now() - this.lastMessage
+		if (diff > 10000) {
+			this.moduleStatus = InstanceStatus.Connecting
+			this.updateStatus(InstanceStatus.Connecting)
+			for (let i = 1; i <= 36; i++) {
+				this.setVariableValues({ [`cg${i}`]: '' })
+			}
+			return this.setVariableValues({ connected: 'Disconnected' })
+		}
+
+		if (this.moduleStatus != InstanceStatus.Ok) {
+			this.updateStatus(InstanceStatus.Ok)
+			this.moduleStatus = InstanceStatus.Ok
+			this.setVariableValues({ connected: 'Connected' })
+		}
+	}
+
+	private handleOSCMessage(msg: any): void {
+		this.lastMessage = Date.now()
+		try {
+			const addressArray = msg[0].split('/')
+			const stringValue = JSON.stringify(msg[1])
+
+			switch (addressArray[1]) {
+				case 'Console':
+					if (addressArray[2] === 'Name') {
+						this.setVariableValues({ console_name: stringValue })
+						// clearInterval(this.connectionLoop)
+						if (this.moduleStatus !== InstanceStatus.Ok) {
+							this.moduleStatus = InstanceStatus.Ok
+							this.updateStatus(InstanceStatus.Ok)
+						}
+						this.cueListPoll = setInterval(() => {
+							if (this.consoleClient) void this.consoleClient.send('/Snapshots/names/?')
+						}, 120000)
+					}
+					break
+				case 'Control_Groups':
+					if (addressArray[3] === 'fader') {
+						const faderVal = parseFloat(stringValue)
+						this.setVariableValues({ [`cg${addressArray[2]}`]: faderVal === -150 ? 'Out' : faderVal.toFixed(2) })
+					}
+					break
+				case 'Snapshots':
+					if (addressArray[2] === 'name') {
+						const i = msg[1]
+						const existingCue = this.cueList.find((c) => c.index == i)
+
+						if (existingCue) {
+							existingCue.name = msg[4]
+							existingCue.number = msg[2]
+						} else {
+							this.cueList.push({
+								name: msg[4],
+								index: msg[1],
+								number: msg[2],
+							})
+						}
+					}
+
+					if (addressArray[2] === 'Current_Snapshot') {
+						this.setVariableValues({
+							current_snapshot: JSON.stringify(this.cueList.find((x) => x.index === msg[1])?.name),
+						})
+					}
+					break
+				default:
+					return
+			}
+		} catch {
+			this.log('debug', 'cannot split this guy')
+		}
 	}
 }
 

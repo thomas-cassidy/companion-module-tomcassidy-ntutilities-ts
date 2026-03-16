@@ -1,5 +1,5 @@
 {
-	"name": "tcass-utilities",
+	"name": "nt-utilities",
 	"version": "0.1.0",
 	"main": "dist/main.js",
 	"type": "module",
@@ -7,7 +7,7 @@
 		"postinstall": "husky",
 		"format": "prettier -w .",
 		"package": "run build && companion-module-build",
-		"build": "rimraf dist && run build:main",
+		"build": "rimraf dist && yarn build:main",
 		"build:main": "tsc -p tsconfig.build.json",
 		"dev": "tsc -p tsconfig.build.json --watch",
 		"lint:raw": "eslint",
@@ -47,5 +47,5 @@
 			"yarn lint:raw --fix"
 		]
 	},
-	"packageManager": "yarn@4.10.2"
+	"packageManager": "yarn@4.13.0"
 }
