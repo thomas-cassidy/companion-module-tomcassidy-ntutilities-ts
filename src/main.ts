@@ -103,6 +103,10 @@ export class ModuleInstance extends InstanceBase<ModuleConfig> {
 					this.connectToConsole()
 				}, 1000)
 
+				this.cueListPoll = setInterval(() => {
+					if (this.consoleClient) void this.consoleClient.send('/Snapshots/names/?')
+				}, 120000)
+
 				this.watchdog = setInterval(() => {
 					this.checkStatus()
 				}, 10000)
@@ -119,13 +123,18 @@ export class ModuleInstance extends InstanceBase<ModuleConfig> {
 
 	//sends connection string and then collects the console name and CG Values
 	private connectToConsole() {
-		if (!this.consoleClient) return
-		void this.consoleClient.send('/Console/Name/?')
-		void this.consoleClient.send('/Snapshots/names/?')
-		for (let i = 1; i <= 36; i++) {
-			void this.consoleClient.send(`/Control_Groups/${i}/fader/?`)
+		if (this.consoleClient) {
+			void this.consoleClient.send('/Console/Name/?')
+			if (this.moduleStatus !== InstanceStatus.Ok) {
+				if (this.consoleClient) {
+					void this.consoleClient.send('/Snapshots/names/?')
+					for (let i = 1; i <= 36; i++) {
+						void this.consoleClient.send(`/Control_Groups/${i}/fader/?`)
+					}
+					void this.consoleClient.send('/Snapshots/Current_Snapshot/?')
+				}
+			}
 		}
-		void this.consoleClient.send('/Snapshots/Current_Snapshot/?')
 	}
 
 	//check last message was within the last 10 seconds
@@ -135,6 +144,7 @@ export class ModuleInstance extends InstanceBase<ModuleConfig> {
 			this.moduleStatus = InstanceStatus.Connecting
 			return this.updateStatus(InstanceStatus.Connecting)
 		}
+
 		const diff = Date.now() - this.lastMessage
 		if (diff > 10000) {
 			this.moduleStatus = InstanceStatus.Connecting
@@ -146,6 +156,7 @@ export class ModuleInstance extends InstanceBase<ModuleConfig> {
 		}
 
 		if (this.moduleStatus != InstanceStatus.Ok) {
+			console.log(this.lastMessage, this.moduleStatus)
 			this.updateStatus(InstanceStatus.Ok)
 			this.moduleStatus = InstanceStatus.Ok
 			this.setVariableValues({ connected: 'Connected' })
@@ -158,18 +169,16 @@ export class ModuleInstance extends InstanceBase<ModuleConfig> {
 			const addressArray = msg[0].split('/')
 			const stringValue = JSON.stringify(msg[1])
 
+			this.log('debug', `Received: ${JSON.stringify(msg)}, ${stringValue}`)
+
 			switch (addressArray[1]) {
 				case 'Console':
 					if (addressArray[2] === 'Name') {
 						this.setVariableValues({ console_name: stringValue })
-						// clearInterval(this.connectionLoop)
 						if (this.moduleStatus !== InstanceStatus.Ok) {
 							this.moduleStatus = InstanceStatus.Ok
 							this.updateStatus(InstanceStatus.Ok)
 						}
-						this.cueListPoll = setInterval(() => {
-							if (this.consoleClient) void this.consoleClient.send('/Snapshots/names/?')
-						}, 120000)
 					}
 					break
 				case 'Control_Groups':
