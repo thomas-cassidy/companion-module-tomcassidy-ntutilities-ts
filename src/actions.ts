@@ -16,17 +16,17 @@ export function UpdateActions(self: ModuleInstance): void {
 				},
 			],
 			callback: async (event) => {
-				let cueNumber: number
+				let macroNumber: number
 
 				if (event.options.num === undefined) return
 
 				try {
-					cueNumber = parseFloat(event.options.num.toString()) * 100
+					macroNumber = parseFloat(event.options.num.toString()) * 100
 				} catch {
 					return
 				}
 
-				const snapshot = self.cueList.find((cue) => cue.number == cueNumber)
+				const snapshot = self.cueList.find((cue) => cue.number == macroNumber)
 				self.log('debug', JSON.stringify(snapshot))
 				if (!snapshot) return
 
@@ -38,6 +38,35 @@ export function UpdateActions(self: ModuleInstance): void {
 				self.sendOSC({
 					address: `/Snapshots/Recall_Snapshot/${snapshot.index as number}`,
 					value: '',
+				})
+			},
+		},
+		fire_macro: {
+			name: 'Fire Macro',
+			options: [
+				{
+					id: 'num',
+					type: 'number',
+					label: 'Macro Number',
+					default: 0,
+					min: 0,
+					max: 9999,
+				},
+			],
+			callback: async (event) => {
+				let macroNumber: number
+
+				if (event.options.num === undefined) return
+
+				try {
+					macroNumber = parseInt(event.options.num.toString()) - 1
+				} catch {
+					return
+				}
+
+				self.sendOSC({
+					address: `/Macros/Buttons/press`,
+					value: macroNumber,
 				})
 			},
 		},

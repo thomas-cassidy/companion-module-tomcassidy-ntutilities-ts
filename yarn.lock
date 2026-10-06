@@ -2022,25 +2022,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"tcass-utilities@workspace:.":
-  version: 0.0.0-use.local
-  resolution: "tcass-utilities@workspace:."
-  dependencies:
-    "@companion-module/base": "npm:~1.12.1"
-    "@companion-module/tools": "npm:^2.3.0"
-    "@types/node": "npm:^22.14.1"
-    "@types/node-osc": "npm:^9.1.0"
-    eslint: "npm:^9.24.0"
-    husky: "npm:^9.1.7"
-    lint-staged: "npm:^15.5.1"
-    node-osc: "npm:^11.0.0"
-    prettier: "npm:^3.5.3"
-    rimraf: "npm:^6.0.1"
-    typescript: "npm:~5.8.3"
-    typescript-eslint: "npm:^8.30.1"
-  languageName: unknown
-  linkType: soft
-
 "onetime@npm:^6.0.0":
   version: 6.0.0
   resolution: "onetime@npm:6.0.0"
@@ -2593,6 +2574,25 @@ __metadata:
   checksum: 10c0/b6bb420550ef50ef23356018155e956cd83282c97b6128d8d5cfe5740c57582d806a244b2ef0bf686a74ce526babe8b8b9061527623e935e850008d86d838929
   languageName: node
   linkType: hard
+
+"tcass-utilities@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "tcass-utilities@workspace:."
+  dependencies:
+    "@companion-module/base": "npm:~1.12.1"
+    "@companion-module/tools": "npm:^2.3.0"
+    "@types/node": "npm:^22.14.1"
+    "@types/node-osc": "npm:^9.1.0"
+    eslint: "npm:^9.24.0"
+    husky: "npm:^9.1.7"
+    lint-staged: "npm:^15.5.1"
+    node-osc: "npm:^11.0.0"
+    prettier: "npm:^3.5.3"
+    rimraf: "npm:^6.0.1"
+    typescript: "npm:~5.8.3"
+    typescript-eslint: "npm:^8.30.1"
+  languageName: unknown
+  linkType: soft
 
 "terser-webpack-plugin@npm:^5.3.17":
   version: 5.4.0

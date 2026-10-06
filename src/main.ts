@@ -27,6 +27,7 @@ export class ModuleInstance extends InstanceBase<ModuleConfig> {
 	private lastMessage?: number
 	private watchdog?: NodeJS.Timeout
 	private cueListPoll?: NodeJS.Timeout
+	private feedbackPoll?: NodeJS.Timeout
 	cueList: Snapshot[] = []
 
 	constructor(internal: unknown) {
@@ -45,6 +46,7 @@ export class ModuleInstance extends InstanceBase<ModuleConfig> {
 
 		this.createOSCServer()
 		this.createClient()
+		this.setFeedbackPoll()
 	}
 	// When module gets deleted
 	async destroy(): Promise<void> {
@@ -55,6 +57,7 @@ export class ModuleInstance extends InstanceBase<ModuleConfig> {
 		clearInterval(this.connectionLoop)
 		clearInterval(this.cueListPoll)
 		clearInterval(this.watchdog)
+		clearInterval(this.feedbackPoll)
 	}
 
 	async configUpdated(config: ModuleConfig): Promise<void> {
@@ -127,15 +130,19 @@ export class ModuleInstance extends InstanceBase<ModuleConfig> {
 	//sends connection string and then collects the console name and CG Values
 	private connectToConsole() {
 		if (this.consoleClient) {
-			void this.consoleClient.send('/Console/Name/?')
-			if (this.moduleStatus !== InstanceStatus.Ok) {
-				if (this.consoleClient) {
-					void this.consoleClient.send('/Snapshots/names/?')
-					for (let i = 1; i <= 36; i++) {
-						void this.consoleClient.send(`/Control_Groups/${i}/fader/?`)
+			try {
+				void this.consoleClient.send('/Console/Name/?')
+				if (this.moduleStatus !== InstanceStatus.Ok) {
+					if (this.consoleClient) {
+						void this.consoleClient.send('/Snapshots/names/?')
+						for (let i = 1; i <= 36; i++) {
+							void this.consoleClient.send(`/Control_Groups/${i}/fader/?`)
+						}
+						void this.consoleClient.send('/Snapshots/Current_Snapshot/?')
 					}
-					void this.consoleClient.send('/Snapshots/Current_Snapshot/?')
 				}
+			} catch (e) {
+				this.log('error', `Cannot connect to console. ${e}`)
 			}
 		}
 	}
@@ -164,6 +171,12 @@ export class ModuleInstance extends InstanceBase<ModuleConfig> {
 			this.moduleStatus = InstanceStatus.Ok
 			this.setVariableValues({ connected: 'Connected' })
 		}
+	}
+
+	private setFeedbackPoll(): void {
+		this.feedbackPoll = setInterval(() => {
+			this.checkFeedbacks()
+		}, 100)
 	}
 
 	private handleOSCMessage(msg: any): void {
@@ -217,7 +230,7 @@ export class ModuleInstance extends InstanceBase<ModuleConfig> {
 					return
 			}
 		} catch {
-			this.log('debug', 'cannot split this guy')
+			this.log('debug', 'Error: Cannot parse OSC message')
 		}
 	}
 }

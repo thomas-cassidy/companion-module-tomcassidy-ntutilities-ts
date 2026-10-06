@@ -6,7 +6,7 @@ export function UpdateVariableDefinitions(self: ModuleInstance): void {
 		{ variableId: 'console_name', name: 'Console Name' },
 		{ variableId: 'current_snapshot', name: 'Current Name' },
 	]
-	for (let i = 1; i <= 36; i++) {
+	for (let i = 1; i <= self.config.cg_count; i++) {
 		vars.push({ variableId: `cg${i}`, name: `Control Group ${i}` })
 	}
 	self.setVariableDefinitions(vars)
